@@ -22,6 +22,7 @@ async function getTwitchOAuth() {
         .catch((error) => console.log(error));
 }
 
+// Initialize map of Twitch usernames to be mapped to Twitter links
 async function initializeCreators() {
     // Initialize Twitch to Twitter link map
     const creatorDb = new Map();
@@ -56,32 +57,37 @@ async function initializeCreators() {
         .catch((error) => console.log(error));
 }
 
+// Retrieve Twitter links via scraping
 async function findAllTwitter(creatorDb) {
     const browser = await puppeteer.launch({
         headless: true,
         ignoreHTTPSErrors: false,
     })
 
-    let page = await browser.newPage();
-
     for (const [key, value] of creatorDb.entries()) {
+        let page = await browser.newPage();
         const twitchLink = `https://twitch.tv/${key}/about`;
         await page.goto(twitchLink);
 
+        // Search for Twitter link in "About" section of Twitch
         try {
             await page.waitForSelector(
                 'a.ScCoreLink-sc-16kq0mq-0.dFpxxo.tw-link',
                 { timeout: 5000 }
             );
             const twitterLink = await page.$eval('a.ScCoreLink-sc-16kq0mq-0.dFpxxo.tw-link[href*=twitter]', tw => tw.href);
+            // Map Twitch username to Twitter link
             creatorDb.set(key, twitterLink);
+            console.log("Twitter link successfully found");
         }
         catch (error) {
-            console.error("Timed out trying to retrieve Twitter link")
+            console.error("Timed out trying to retrieve Twitter link");
+        }
+        finally {
+            await page.close();
         }
     }
-
-    await page.close()
+    await browser.close()
 }
 
 let creatorDb = await initializeCreators();
