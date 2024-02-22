@@ -23,24 +23,27 @@ async function getTwitchOAuth() {
 }
 
 // Initialize map of Twitch usernames to be mapped to Twitter links
-async function initializeCreators() {
+async function getTwitchCreators(cursor, batchSize) {
     // Initialize Twitch to Twitter link map
     const creatorDb = new Map();
-    
-    console.log(process.env.TWITCH_ID);
 
     const token = await getTwitchOAuth();
-    console.log('Bearer ' + token.access_token);
 
     const config = {
         method: 'get',
         maxBodyLength: Infinity,
-        url: 'https://api.twitch.tv/helix/streams?first=100',
         headers: {
             'Content-Type' : 'application/json',
             'Client-ID': process.env.TWITCH_ID,
             'Authorization': `Bearer ${token.access_token}`,
         }
+    }
+
+    if (cursor == '') {
+        config.url = `https://api.twitch.tv/helix/streams?first=${batchSize}`;
+    }
+    else {
+        config.url = `https://api.twitch.tv/helix/streams?first=${batchSize}&after=${cursor}`;
     }
 
     //GET request for /streams endpoint to retrieve creator usernames based on streams with highest viewer count
@@ -52,7 +55,10 @@ async function initializeCreators() {
                 };
             })
             console.log(creatorDb);
-            return creatorDb;
+            return {
+                'map': creatorDb,
+                'cursor': response.data.pagination.cursor
+            }
         })
         .catch((error) => console.log(error));
 }
@@ -90,8 +96,4 @@ async function findAllTwitter(creatorDb) {
     await browser.close()
 }
 
-let creatorDb = await initializeCreators();
-await findAllTwitter(creatorDb);
-console.log(creatorDb);
-
-export { creatorDb }
+export { getTwitchCreators, findAllTwitter }
