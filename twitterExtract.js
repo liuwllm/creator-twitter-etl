@@ -67,6 +67,17 @@ async function getTwitterInfo(creatorDb) {
                 }
             }
 
+            let commentsSum = 0;
+            let retweetsSum = 0;
+            let quotesSum = 0;
+            let likesSum = 0;
+            for (const tweet of tweetsCollection){
+                commentsSum += tweet.comments
+                retweetsSum += tweet.retweets
+                quotesSum += tweet.quotes
+                likesSum += tweet.likes
+            }
+
             console.log(tweetsCollection);
 
             creatorDb.set(
@@ -83,6 +94,12 @@ async function getTwitterInfo(creatorDb) {
                         "likes": twitterLikes
                     },
                     "tweets": tweetsCollection,
+                    "tweetStats": {
+                        "avgComments": commentsSum / tweetsCollection.length,
+                        "avgRetweets": retweetsSum / tweetsCollection.length,
+                        "avgQuotes": quotesSum / tweetsCollection.length,
+                        "avgLikes": likesSum / tweetsCollection.length,
+                    }
                 });
             console.log("Twitter data successfully found");
             console.log(creatorDb);
@@ -96,10 +113,5 @@ async function getTwitterInfo(creatorDb) {
     }
     await browser.close()
 }
-
-let map = new Map();
-map.set("test", "TenZOfficial")
-
-getTwitterInfo(map);
 
 export { getTwitterInfo }
