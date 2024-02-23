@@ -1,10 +1,11 @@
 import { getTwitchCreators, findAllTwitter } from "./twitchExtract.js";
+import { getTwitterInfo } from "./twitterExtract.js";
 
 async function main() {
     // Determines how many creators retrieved per API call
-    const batchSize = 1; // Max value of 100
+    const batchSize = 10; // Max value of 100
     // Determines how many Twitch API calls made
-    const iterations = 2;
+    const iterations = 1;
 
     let twitchCursor = '';
     
@@ -16,6 +17,8 @@ async function main() {
         // Scrape Twitch for Twitter links
         await findAllTwitter(creatorDb);
         console.log(creatorDb);
+        await getTwitterInfo(creatorDb);
+        console.log([...creatorDb.values()]);
     }
 }
 

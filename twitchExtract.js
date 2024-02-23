@@ -83,11 +83,14 @@ async function findAllTwitter(creatorDb) {
             );
             const twitterLink = await page.$eval('a.ScCoreLink-sc-16kq0mq-0.dFpxxo.tw-link[href*=twitter]', tw => tw.href);
             // Map Twitch username to Twitter link
-            creatorDb.set(key, twitterLink);
-            console.log("Twitter link successfully found");
+            const splitLink = twitterLink.split('/');
+            const twitterUsername = splitLink[splitLink.length - 1];
+
+            creatorDb.set(key, twitterUsername);
+            console.log("Twitter username successfully found");
         }
         catch (error) {
-            console.error("Timed out trying to retrieve Twitter link");
+            console.error("Timed out trying to retrieve Twitter username");
         }
         finally {
             await page.close();
