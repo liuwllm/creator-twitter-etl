@@ -100,10 +100,10 @@ async function getTwitterInfo(creatorDb) {
                         "bio": twitterBio,
                         "location": twitterLocation,
                         "website": twitterWebsite,
-                        "posts": twitterPosts,
-                        "following": twitterFollowing,
-                        "followers": twitterFollowers,
-                        "likes": twitterLikes
+                        "posts": parseInt(twitterPosts.replace(',', '')),
+                        "following": parseInt(twitterFollowing.replace(',', '')),
+                        "followers": parseInt(twitterFollowers.replace(',', '')),
+                        "likes": parseInt(twitterLikes.replace(',', ''))
                     },
                     "tweets": tweetsCollection,
                     "tweetStats": {
