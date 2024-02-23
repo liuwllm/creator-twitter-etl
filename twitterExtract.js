@@ -33,7 +33,6 @@ async function getTwitterInfo(creatorDb) {
             const twitterFollowing = await page.$eval('.following > :nth-child(2)', div => div.innerHTML);
             const twitterFollowers = await page.$eval('.followers > :nth-child(2)', div => div.innerHTML);
             const twitterLikes = await page.$eval('.likes > :nth-child(2)', div => div.innerHTML);
-            console.log(twitterFollowing+"TT");
 
             let tweetsCollection = [];
             
@@ -77,10 +76,18 @@ async function getTwitterInfo(creatorDb) {
             let quotesSum = 0;
             let likesSum = 0;
             for (const tweet of tweetsCollection){
-                commentsSum += tweet.comments;
-                retweetsSum += tweet.retweets;
-                quotesSum += tweet.quotes;
-                likesSum += tweet.likes;
+                if (tweet.comments) {
+                    commentsSum += tweet.comments;
+                }
+                if (tweet.retweets) {
+                    retweetsSum += tweet.retweets;
+                }
+                if (tweet.quotes) {
+                    quotesSum += tweet.quotes;
+                }
+                if (tweet.likes) {
+                    likesSum += tweet.likes;
+                }
             }
 
             console.log(tweetsCollection);

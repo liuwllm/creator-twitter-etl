@@ -15,9 +15,9 @@ async function run(creatorDb) {
     try {
         await client.connect();
         await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. YOu successfully connected to MongoDB!");
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
     
-        load(creatorDb, client);
+        await load(creatorDb, client);
     }
     finally {
         await client.close();
@@ -30,7 +30,8 @@ async function load(creatorDb, client) {
 
     for (const [key, value] of creatorDb.entries()) {
         let userData = {
-            key: value
+            "twitchUsername": key,
+            "data": value
         };
 
         await collection.insertOne(userData, (err, res) => {
@@ -39,11 +40,5 @@ async function load(creatorDb, client) {
         })
     }
 };
-
-const map = new Map();
-map.set("test", "TenZOfficial");
-
-await getTwitterInfo(map);
-await run(map);
 
 export { run }

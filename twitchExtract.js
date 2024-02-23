@@ -72,10 +72,10 @@ async function findAllTwitter(creatorDb) {
     for (const [key, value] of creatorDb.entries()) {
         let page = await browser.newPage();
         const twitchLink = `https://twitch.tv/${key}/about`;
-        await page.goto(twitchLink);
 
         // Search for Twitter link in "About" section of Twitch
         try {
+            await page.goto(twitchLink);
             await page.waitForSelector(
                 'a.ScCoreLink-sc-16kq0mq-0.dFpxxo.tw-link',
                 { timeout: 5000 }

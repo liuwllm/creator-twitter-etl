@@ -1,5 +1,6 @@
 import { getTwitchCreators, findAllTwitter } from "./twitchExtract.js";
 import { getTwitterInfo } from "./twitterExtract.js";
+import { run } from "./load.js";
 
 async function main() {
     // Determines how many creators retrieved per API call
@@ -16,9 +17,8 @@ async function main() {
     
         // Scrape Twitch for Twitter links
         await findAllTwitter(creatorDb);
-        console.log(creatorDb);
         await getTwitterInfo(creatorDb);
-        console.log([...creatorDb.values()]);
+        await run(creatorDb);
     }
 }
 
