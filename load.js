@@ -17,16 +17,18 @@ async function run(creatorDb) {
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     
-        await load(creatorDb, client);
+        await loadTweets(creatorDb, client);
     }
     finally {
         await client.close();
     }
 };
 
-async function load(creatorDb, client) {
-    const tweetDb = await client.db("twitter-data");
-    const collection = await tweetDb.collection("data");
+
+
+async function loadTweets(creatorDb, client) {
+    const twitterDb = await client.db("twitter-data");
+    const collection = await twitterDb.collection("tweets");
 
     for (const [key, value] of creatorDb.entries()) {
         let userData = {
@@ -41,4 +43,4 @@ async function load(creatorDb, client) {
     }
 };
 
-export { run }
+export { run, client }

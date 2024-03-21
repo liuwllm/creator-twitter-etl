@@ -98,4 +98,96 @@ async function findAllTwitter(creatorDb) {
     await browser.close()
 }
 
-export { getTwitchCreators, findAllTwitter }
+async function requestId(user) {
+    const options = {
+        method: 'GET',
+        url: 'https://twitter241.p.rapidapi.com/user',
+        params: {
+            username: user
+        },
+        headers: {
+            'X-RapidAPI-Key': process.env.TWITTER_KEY,
+            'X-RapidAPI-Host': 'twitter241.p.rapidapi.com'
+        }
+    }
+    
+    return axios.request(options)
+        .then((response) => {
+            return response.data.result.data.user.result.rest_id;
+        })
+        .catch((error) => console.log(error));
+}
+
+async function retrieveTwitterIds(creatorDb, client) {
+    const creatorDbArray = Array.from(creatorDb);
+    const fullArray = [];
+
+    let count = 0;
+    while(true){
+        if (count + 10 >= creatorDbArray.length){
+            fullArray.push(creatorDbArray.slice(count))
+            break;
+        }
+        else {
+            fullArray.push(creatorDbArray.slice(count, count + 10))
+            count += 10;
+        }
+    }
+
+    try {
+        await client.connect();
+        await client.db("admin").command({ ping: 1 });
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    
+        const twitterDb = await client.db("twitter-data");
+        const collection = await twitterDb.collection("id-data");
+
+        console.log(fullArray);
+        console.log(fullArray[0]);
+        for (const arrayBatch of fullArray){
+            const requestPromises = [];
+            const uploadsPromises = [];
+            
+            for (const user of arrayBatch){
+                requestPromises.push(requestId(user[1]));
+            }
+
+            await Promise.all(requestPromises)
+                .then((results) => {
+                    let promiseNumber = 0;
+    
+                    for (const [key, value] of creatorDb.entries()) {
+                        let idData = {
+                            "twitchUsername": key,
+                            "twitterId": results[promiseNumber],
+                        }
+                        uploadsPromises.push(
+                            collection.insertOne(idData, (err, res) => {
+                                if (err) throw err;
+                                console.log("Queued document");
+                            })
+                        )
+                        promiseNumber++;
+                        if (promiseNumber == results.length){
+                            break;
+                        }
+                    }
+                })
+            
+            await Promise.all(uploadsPromises)
+                .then((results) => {
+                    results.forEach((result) =>{
+                        console.log("Inserted document")
+                    })
+                })
+        }
+    }
+    catch(error) {
+        console.log(error);
+    }
+    finally {
+        await client.close();
+    }
+}
+
+export { getTwitchCreators, findAllTwitter, retrieveTwitterIds }

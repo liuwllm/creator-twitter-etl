@@ -1,10 +1,9 @@
-import { getTwitchCreators, findAllTwitter } from "./twitchExtract.js";
-import { getTwitterInfo } from "./twitterExtract.js";
-import { run } from "./load.js";
+import { getTwitchCreators, findAllTwitter, retrieveTwitterIds } from "./twitchExtract.js";
+import { client } from './load.js';
 
-async function main() {
+async function buildIdDb() {
     // Determines how many creators retrieved per API call
-    const batchSize = 10; // Max value of 100
+    const batchSize = 20; // Max value of 100
     // Determines how many Twitch API calls made
     const iterations = 1;
 
@@ -14,12 +13,10 @@ async function main() {
         let twitchResults = await getTwitchCreators(twitchCursor, batchSize);
         let creatorDb = twitchResults.map;
         twitchCursor = twitchResults.cursor;
-    
-        // Scrape Twitch for Twitter links
+
         await findAllTwitter(creatorDb);
-        await getTwitterInfo(creatorDb);
-        await run(creatorDb);
+        await retrieveTwitterIds(creatorDb, client);
     }
 }
 
-main();
+buildIdDb();
