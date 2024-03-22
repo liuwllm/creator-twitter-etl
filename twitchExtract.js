@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as puppeteer from 'puppeteer';
+import { createClient, connectClient } from './load.js';
 
 import dotenv from 'dotenv';
 
@@ -118,7 +119,55 @@ async function requestId(user) {
         .catch((error) => console.log(error));
 }
 
-async function retrieveTwitterIds(creatorDb, client) {
+async function concurrentReqTwitter(requestPromises, creatorDb) {
+    const client = createClient();
+    try {
+        await connectClient(client);
+
+        const twitterDb = await client.db("twitter-data");
+        const collection = await twitterDb.collection("id-data");
+
+        const uploadsPromises = [];
+
+        Promise.all(requestPromises)
+            .then((results) => {
+                let promiseNumber = 0;
+        
+                for (const [key, value] of creatorDb.entries()) {
+                    let idData = {
+                        "twitchUsername": key,
+                        "twitterId": results[promiseNumber],
+                    }
+                    uploadsPromises.push(
+                        collection.insertOne(idData, (err, res) => {
+                            if (err) throw err;
+                            console.log("Queued document");
+                        })
+                    )
+                    promiseNumber++;
+                    if (promiseNumber == results.length){
+                        break;
+                    }
+                }
+            })
+            
+        return uploadsPromises;
+    }
+    finally {
+        await client.close();
+    }
+}
+
+async function concurrentUploadTwitter(uploadsPromises){
+    Promise.all(uploadsPromises)
+        .then((results) => {
+            results.forEach(() =>{
+                console.log("Inserted document")
+            })
+        })
+}
+
+function sliceCreatorDb(creatorDb) {
     const creatorDbArray = Array.from(creatorDb);
     const fullArray = [];
 
@@ -133,60 +182,27 @@ async function retrieveTwitterIds(creatorDb, client) {
             count += 10;
         }
     }
+    
+    return fullArray;
+}
+
+async function retrieveTwitterIds(creatorDb) {
+    const fullArray = sliceCreatorDb(creatorDb);
 
     try {
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    
-        const twitterDb = await client.db("twitter-data");
-        const collection = await twitterDb.collection("id-data");
-
-        console.log(fullArray);
-        console.log(fullArray[0]);
         for (const arrayBatch of fullArray){
             const requestPromises = [];
-            const uploadsPromises = [];
             
             for (const user of arrayBatch){
                 requestPromises.push(requestId(user[1]));
             }
 
-            await Promise.all(requestPromises)
-                .then((results) => {
-                    let promiseNumber = 0;
-    
-                    for (const [key, value] of creatorDb.entries()) {
-                        let idData = {
-                            "twitchUsername": key,
-                            "twitterId": results[promiseNumber],
-                        }
-                        uploadsPromises.push(
-                            collection.insertOne(idData, (err, res) => {
-                                if (err) throw err;
-                                console.log("Queued document");
-                            })
-                        )
-                        promiseNumber++;
-                        if (promiseNumber == results.length){
-                            break;
-                        }
-                    }
-                })
-            
-            await Promise.all(uploadsPromises)
-                .then((results) => {
-                    results.forEach((result) =>{
-                        console.log("Inserted document")
-                    })
-                })
+            const uploadsPromises = await concurrentReqTwitter(requestPromises, creatorDb);
+            await concurrentUploadTwitter(uploadsPromises);
         }
     }
     catch(error) {
         console.log(error);
-    }
-    finally {
-        await client.close();
     }
 }
 

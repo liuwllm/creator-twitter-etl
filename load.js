@@ -3,13 +3,23 @@ import { getTwitterInfo } from './twitterExtract.js';
 
 const uri = process.env.MONGODB_URI
 
-const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    }
-});
+function createClient() {
+    const client = new MongoClient(uri, {
+        serverApi: {
+            version: ServerApiVersion.v1,
+            strict: true,
+            deprecationErrors: true,
+        }
+    });
+
+    return client;
+}
+
+async function connectClient(client) {
+    await client.connect();
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+}
 
 async function run(creatorDb) {
     try {
@@ -43,4 +53,4 @@ async function loadTweets(creatorDb, client) {
     }
 };
 
-export { run, client }
+export { run, createClient, connectClient }
