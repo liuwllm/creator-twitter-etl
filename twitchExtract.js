@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as puppeteer from 'puppeteer';
 import { createClient, connectClient } from './load.js';
+import Bottleneck from 'bottleneck';
 
 import dotenv from 'dotenv';
 
@@ -173,13 +174,13 @@ function sliceCreatorDb(creatorDb) {
 
     let count = 0;
     while(true){
-        if (count + 10 >= creatorDbArray.length){
+        if (count + 1 >= creatorDbArray.length){
             fullArray.push(creatorDbArray.slice(count))
             break;
         }
         else {
-            fullArray.push(creatorDbArray.slice(count, count + 10))
-            count += 10;
+            fullArray.push(creatorDbArray.slice(count, count + 1))
+            count += 1;
         }
     }
     
@@ -197,7 +198,12 @@ async function retrieveTwitterIds(creatorDb) {
                 requestPromises.push(requestId(user[1]));
             }
 
-            const uploadsPromises = await concurrentReqTwitter(requestPromises, creatorDb);
+            const limiter = new Bottleneck({
+                maxConcurrent: 10,
+                minTime: 100
+            });
+            
+            const uploadsPromises = await limiter.schedule(() => concurrentReqTwitter(requestPromises, creatorDb));
             await concurrentUploadTwitter(uploadsPromises);
         }
     }

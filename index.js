@@ -12,7 +12,8 @@ async function buildIdDb() {
         //let twitchResults = await getTwitchCreators(twitchCursor, batchSize);
         //let creatorDb = twitchResults.map;
         let creatorDb = new Map();
-        creatorDb.set('ow_esports', 'OW_Esports');
+        creatorDb.set('bao', 'baovtuber')
+        creatorDb.set('CDawgVA', 'CDawgVA')
         //twitchCursor = twitchResults.cursor;
 
         //await findAllTwitter(creatorDb);
