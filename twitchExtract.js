@@ -1,10 +1,9 @@
 import axios from 'axios';
 import * as puppeteer from 'puppeteer';
-import { createClient, connectClient } from './load.js';
 import Bottleneck from 'bottleneck';
 
 import dotenv from 'dotenv';
-
+import { Collection } from 'mongodb';
 dotenv.config();
 
 // Retrieve OAuth token from Twitch
@@ -120,96 +119,54 @@ async function requestId(user) {
         .catch((error) => console.log(error));
 }
 
-async function concurrentReqTwitter(requestPromises, creatorDb) {
-    const client = createClient();
-    try {
-        await connectClient(client);
+async function uploadToDb(idData, client) {
+    const db = await client.db("twitter-data");
+    const idCollection = await db.collection("id-data");
 
-        const twitterDb = await client.db("twitter-data");
-        const collection = await twitterDb.collection("id-data");
-
-        const uploadsPromises = [];
-
-        Promise.all(requestPromises)
-            .then((results) => {
-                let promiseNumber = 0;
-        
-                for (const [key, value] of creatorDb.entries()) {
-                    let idData = {
-                        "twitchUsername": key,
-                        "twitterId": results[promiseNumber],
-                    }
-                    uploadsPromises.push(
-                        collection.insertOne(idData, (err, res) => {
-                            if (err) throw err;
-                            console.log("Queued document");
-                        })
-                    )
-                    promiseNumber++;
-                    if (promiseNumber == results.length){
-                        break;
-                    }
-                }
-            })
-            
-        return uploadsPromises;
-    }
-    finally {
-        await client.close();
-    }
+    idCollection.insertOne(idData, (err, res) => {
+        if (err) throw err;
+        console.log("Queued document");
+    })
 }
 
-async function concurrentUploadTwitter(uploadsPromises){
-    Promise.all(uploadsPromises)
-        .then((results) => {
-            results.forEach(() =>{
-                console.log("Inserted document")
-            })
-        })
-}
+async function retrieveTwitterIds(creatorDb, client) {
+    const fullArray = Array.from(creatorDb);
+    
+    console.log(fullArray);
 
-function sliceCreatorDb(creatorDb) {
-    const creatorDbArray = Array.from(creatorDb);
-    const fullArray = [];
+    const limiter = new Bottleneck({
+        maxConcurrent: 1,
+        minTime: 2000,
+    });
+  
+    const requestPromises = fullArray.map(user => {
+        return limiter.schedule(() =>{
+            return requestId(user[1])
+        });
+    }); 
 
-    let count = 0;
-    while(true){
-        if (count + 1 >= creatorDbArray.length){
-            fullArray.push(creatorDbArray.slice(count))
+    const twitterResults = await Promise.all(requestPromises);
+
+    let promiseNumber = 0;
+    const uploadsPromises = [];
+
+    for (const user of fullArray) {
+        let idData = {
+            "twitchUsername": user[0],
+            "twitterId": twitterResults[promiseNumber],
+        }
+        uploadsPromises.push(uploadToDb(idData, client));
+        promiseNumber++;
+        if (promiseNumber == twitterResults.length){
             break;
         }
-        else {
-            fullArray.push(creatorDbArray.slice(count, count + 1))
-            count += 1;
-        }
     }
-    
-    return fullArray;
-}
 
-async function retrieveTwitterIds(creatorDb) {
-    const fullArray = sliceCreatorDb(creatorDb);
+    const uploadResults = await Promise.all(uploadsPromises);
+    uploadResults.forEach(() =>{
+        console.log("Inserted document")
+    })
 
-    try {
-        for (const arrayBatch of fullArray){
-            const requestPromises = [];
-            
-            for (const user of arrayBatch){
-                requestPromises.push(requestId(user[1]));
-            }
-
-            const limiter = new Bottleneck({
-                maxConcurrent: 10,
-                minTime: 100
-            });
-            
-            const uploadsPromises = await limiter.schedule(() => concurrentReqTwitter(requestPromises, creatorDb));
-            await concurrentUploadTwitter(uploadsPromises);
-        }
-    }
-    catch(error) {
-        console.log(error);
-    }
 }
 
 export { getTwitchCreators, findAllTwitter, retrieveTwitterIds }
