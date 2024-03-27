@@ -1,6 +1,7 @@
 import { getTwitchCreators, findAllTwitter, retrieveTwitterIds } from "./twitchExtract.js";
 import { retrieveTweets } from "./twitterAPIextract.js";
-import { MongoClient, ServerApiVersion } from 'mongodb';
+import { MongoClient } from 'mongodb';
+import { aggregate } from './aggregate.js'
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -22,11 +23,11 @@ async function buildIdDb(client) {
     for (let i = 0; i < iterations; i++) {
         //let twitchResults = await getTwitchCreators(twitchCursor, batchSize);
         //let creatorDb = twitchResults.map;
-        let creatorDb = new Map();
-        creatorDb.set('bao', 'baovtuber')
-        creatorDb.set('CDawgVA', 'CDawgVA')
         //twitchCursor = twitchResults.cursor;
 
+        let creatorDb = new Map();
+        creatorDb.set("bao", "baovtuber");
+        creatorDb.set("CDawgVA", "CDawgVA");
         //await findAllTwitter(creatorDb);
         await retrieveTwitterIds(creatorDb, client);
     }
@@ -35,14 +36,23 @@ async function buildIdDb(client) {
 async function main() {
     const uri = process.env.MONGODB_URI
     
+    // Change values depending on which function needed; typically will only be retrieving tweets
+    const buildingDb = true;
+    const retrievingTweets = true;
+
     if (!client) {
         client = new MongoClient(uri);
     }
     
     try{
         await client.connect();
-        //await buildIdDb(client);
-        await retrieveTweets(client);
+        if (buildingDb){
+            //await buildIdDb(client);
+        }
+        if (retrievingTweets){
+            //await retrieveTweets(client);
+            await aggregate(client);
+        }
     }
     catch (error) {
         console.error(error);

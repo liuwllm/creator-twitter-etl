@@ -100,6 +100,10 @@ async function findAllTwitter(creatorDb) {
 }
 
 async function requestId(user) {
+    if (!user) {
+        return;
+    }
+    
     const options = {
         method: 'GET',
         url: 'https://twitter241.p.rapidapi.com/user',
@@ -114,25 +118,21 @@ async function requestId(user) {
     
     return axios.request(options)
         .then((response) => {
+            console.log(response.data);
             return response.data.result.data.user.result.rest_id;
         })
         .catch((error) => console.log(error));
 }
 
-async function uploadToDb(idData, client) {
+async function uploadToDb(query, idData, client) {
     const db = await client.db("twitter-data");
     const idCollection = await db.collection("id-data");
 
-    idCollection.insertOne(idData, (err, res) => {
-        if (err) throw err;
-        console.log("Queued document");
-    })
+    idCollection.updateOne(query, idData, { upsert: true });
 }
 
 async function retrieveTwitterIds(creatorDb, client) {
     const fullArray = Array.from(creatorDb);
-    
-    console.log(fullArray);
 
     const limiter = new Bottleneck({
         maxConcurrent: 1,
@@ -151,11 +151,14 @@ async function retrieveTwitterIds(creatorDb, client) {
     const uploadsPromises = [];
 
     for (const user of fullArray) {
-        let idData = {
-            "twitchUsername": user[0],
-            "twitterId": twitterResults[promiseNumber],
+        if (twitterResults[promiseNumber] != null) {
+            const query = { "twitchUsername": user[0] }
+            const idData = { $set: {
+                "twitchUsername": user[0],
+                "twitterId": twitterResults[promiseNumber],
+            }}
+            uploadsPromises.push(uploadToDb(query, idData, client));
         }
-        uploadsPromises.push(uploadToDb(idData, client));
         promiseNumber++;
         if (promiseNumber == twitterResults.length){
             break;

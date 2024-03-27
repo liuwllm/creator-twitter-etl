@@ -46,6 +46,13 @@ async function uploadTweet(tweetData, client) {
     })
 }
 
+async function uploadProfileData (query, profileData, client) {
+    const db = await client.db("twitter-data");
+    const profileCollection = await db.collection("profile-data");
+
+    profileCollection.updateOne(query, profileData, { upsert: true});
+}
+
 function handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, client) {
     let cursor;
     let tweetsLocation;
@@ -71,16 +78,14 @@ function handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, clie
                 continue;
             }
 
-            let dateOfTweet = moment(tweet.content.itemContent.tweet_results.result.legacy.created_at, "ddd MMM DD hh:mm:ss ZZ YYYY");
-            console.log(dateOfTweet);
-            console.log(lastUpdated);
+            let dateOfTweet = moment(tweet.content.itemContent.tweet_results.result.legacy.created_at, "ddd MMM DD hh:mm:ss ZZ YYYY").toDate();
 
-            if (dateOfTweet.isBefore(lastUpdated)) {
+            if (dateOfTweet < lastUpdated) {
                 allTweetsFound = true;
                 break;
             }
 
-            if (dateOfTweet.isAfter(lastUpdated)) {
+            if (dateOfTweet > lastUpdated) {
                 const tweetData = {
                     "user_id": result.id,
                     "date_posted": dateOfTweet,
@@ -93,6 +98,7 @@ function handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, clie
                     "bookmarks": tweet.content.itemContent.tweet_results.result.legacy.bookmark_count,
                 }
                 uploadsPromises.push(uploadTweet(tweetData, client));
+                lastUpdated = dateOfTweet;
             }
         }
         catch (error){
@@ -101,13 +107,60 @@ function handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, clie
         }
     }
 
-    console.log(uploadsPromises);
-
     return {
         allTweetsFound: allTweetsFound,
         uploadsPromises: uploadsPromises,
         cursor: cursor,
+        lastUpdated: lastUpdated
     };
+}
+
+function handleProfileData (result, lastUpdated, uploadsPromises, client) {
+    let tweetsLocation;
+
+    for (let section of result.data.timeline.instructions) {
+        if (section.type == "TimelineAddEntries") {
+            tweetsLocation = section
+        }
+    }
+
+    for (let tweet of tweetsLocation.entries){
+        try {
+            if (tweet.content.__typename != "TimelineTimelineItem"){
+                continue;
+            }
+            else if (tweet.content.itemContent.__typename != "TimelineTweet"){
+                continue;
+            }
+
+            let dateOfTweet = moment(tweet.content.itemContent.tweet_results.result.legacy.created_at, "ddd MMM DD hh:mm:ss ZZ YYYY").toDate();
+
+            if (dateOfTweet < lastUpdated) {
+                break;
+            }
+
+            if (dateOfTweet > lastUpdated) {
+                const query = { "user_id": result.id }
+                const profileData = { $set: {
+                    "user_id": result.id,
+                    "last_updated": dateOfTweet,
+                    "description": tweet.content.itemContent.tweet_results.result.core.user_results.result.legacy.description,
+                    "total_likes": tweet.content.itemContent.tweet_results.result.core.user_results.result.legacy.favourites_count,
+                    "total_followers": tweet.content.itemContent.tweet_results.result.core.user_results.result.legacy.followers_count,
+                    "location": tweet.content.itemContent.tweet_results.result.core.user_results.result.legacy.location,
+                    "verified": tweet.content.itemContent.tweet_results.result.core.user_results.result.legacy.verified,
+                }}
+                uploadsPromises.push(uploadProfileData(query, profileData, client));
+                break;
+            }
+        }
+        catch (error){
+            console.log(error);
+            continue;
+        }
+    }
+
+    return uploadsPromises;
 }
 
 async function retrieveTweets(client) {
@@ -135,34 +188,46 @@ async function retrieveTweets(client) {
 
         let uploadsPromises = [];
         let allTweetsFound = false;
-        let lastUpdated = moment().subtract(2, 'days');
+        let lastUpdated = moment().subtract(2, 'days').toDate();
 
         for (let result of tweetResults) {
-            if (await profileCollection.findOne({id: result.id}) != null) {
-                lastUpdated = await profileCollection.findOne({id: result.id}, {last_updated:1})
-            }
-            
-            let handleResult = handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, client);
-            allTweetsFound = handleResult.allTweetsFound;
-            uploadsPromises = handleResult.uploadsPromises;
-            console.log(uploadsPromises);
-            let currCursor = handleResult.cursor;
-
-            if (allTweetsFound == false) {
-                while (allTweetsFound == false) {
-                    let subsequentResult = await limiter.schedule(() => {return requestTweets(result.id, currCursor)});
-                    let handleSubsequent = handleTweets(subsequentResult, lastUpdated, allTweetsFound, uploadsPromises, client);
-                    currCursor = handleSubsequent.cursor;
-                    allTweetsFound = handleSubsequent.allTweetsFound;
-                    uploadsPromises = handleResult.uploadsPromises;
+            try {
+                console.log(await profileCollection.findOne({user_id: result.id}, {last_updated:1}));
+                console.log("HELP")
+                if (await profileCollection.findOne({user_id: result.id}, {last_updated:1}) != null) {
+                    lastUpdated = await profileCollection.findOne({user_id: result.id}, {last_updated:1})
+                    console.log(lastUpdated);
                 }
-            }
+                
+                let handleResult = handleTweets(result, lastUpdated, allTweetsFound, uploadsPromises, client);
+                allTweetsFound = handleResult.allTweetsFound;
+                uploadsPromises = handleResult.uploadsPromises;
 
-            const uploadResults = await Promise.all(uploadsPromises);
-            uploadResults.forEach(() =>{
-                console.log("Inserted document")
-            })
-            await idCursor.close();
+                let currCursor = handleResult.cursor;
+
+                if (allTweetsFound == false) {
+                    while (allTweetsFound == false) {
+                        let subsequentResult = await limiter.schedule(() => {return requestTweets(result.id, currCursor)});
+                        let handleSubsequent = handleTweets(subsequentResult, lastUpdated, allTweetsFound, uploadsPromises, client);
+                        currCursor = handleSubsequent.cursor;
+                        allTweetsFound = handleSubsequent.allTweetsFound;
+                        uploadsPromises = handleResult.uploadsPromises;
+                        lastUpdated = handleResult.lastUpdated;
+                    }
+                }
+
+                uploadsPromises = handleProfileData(result, lastUpdated, uploadsPromises, client);
+
+                const uploadResults = await Promise.all(uploadsPromises);
+                uploadResults.forEach(() =>{
+                    console.log("Inserted document");
+                })
+                await idCursor.close();
+            }
+            catch (error) {
+                console.log(error);
+                continue;
+            }
         }
 }
 
